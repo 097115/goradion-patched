@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"slices"
 	"sync"
 	"time"
 )
@@ -21,10 +22,12 @@ const (
 
 type Player struct {
 	sync.Mutex
-	Info  chan Info
-	cmd   *exec.Cmd
-	info  *Info
-	retry *Retry
+	Info        chan Info
+	cmd         *exec.Cmd
+	info        *Info
+	retry       *Retry
+	savedVolume int
+	fadeCancel  context.CancelFunc
 }
 
 type Info struct {
@@ -116,20 +119,105 @@ func (p *Player) VolumeDn() {
 	}
 
 	log.Printf("setting volume %d\n", p.info.Volume-5)
-	cmd := fmt.Sprintf(`{"command": ["set_property", "volume", %d]}%s`, p.info.Volume, "\n")
+	cmd := fmt.Sprintf(`{"command": ["set_property", "volume", %d]}%s`, p.info.Volume-5, "\n")
 	writeToMPV([]byte(cmd))
 	p.info.Volume -= 5
 }
 
-func (p *Player) Toggle(station, url string) {
+func (p *Player) FadeOut(ctx context.Context, duration time.Duration) {
 	p.Lock()
-	defer p.Unlock()
+	startVolume := p.info.Volume
+	p.savedVolume = startVolume
+	p.Unlock()
 
-	if url == "" {
+	if startVolume == 0 {
 		return
 	}
 
-	if url == p.info.Url {
+	steps := 20
+	stepDuration := duration / time.Duration(steps)
+
+	for i := 1; i <= steps; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		newVolume := startVolume * (steps - i) / steps
+
+		p.Lock()
+		p.info.Volume = newVolume
+		cmd := fmt.Sprintf(`{"command": ["set_property", "volume", %d]}%s`, newVolume, "\n")
+		writeToMPV([]byte(cmd))
+		p.Info <- *p.info
+		p.Unlock()
+
+		if i < steps {
+			time.Sleep(stepDuration)
+		}
+	}
+}
+
+func (p *Player) FadeIn(ctx context.Context, duration time.Duration) {
+	p.Lock()
+	targetVolume := p.savedVolume
+	if targetVolume == 0 {
+		targetVolume = defaultVolume
+	}
+	p.Unlock()
+
+	steps := 20
+	stepDuration := duration / time.Duration(steps)
+
+	for i := 1; i <= steps; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		newVolume := targetVolume * i / steps
+
+		p.Lock()
+		p.info.Volume = newVolume
+		cmd := fmt.Sprintf(`{"command": ["set_property", "volume", %d]}%s`, newVolume, "\n")
+		writeToMPV([]byte(cmd))
+		p.Info <- *p.info
+		p.Unlock()
+
+		if i < steps {
+			time.Sleep(stepDuration)
+		}
+	}
+}
+
+func (p *Player) SetVolume(volume int) {
+	p.Lock()
+	defer p.Unlock()
+
+	if volume < 0 {
+		volume = 0
+	}
+	if volume > 100 {
+		volume = 100
+	}
+
+	p.info.Volume = volume
+	cmd := fmt.Sprintf(`{"command": ["set_property", "volume", %d]}%s`, volume, "\n")
+	writeToMPV([]byte(cmd))
+	p.Info <- *p.info
+}
+
+func (p *Player) Toggle(station Station) {
+	p.Lock()
+	defer p.Unlock()
+
+	if station.url == "" {
+		return
+	}
+
+	if station.url == p.info.Url {
 		p.Stop()
 		p.info.PrevSong = ""
 		p.info.Url = ""
@@ -143,13 +231,13 @@ func (p *Player) Toggle(station, url string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.retry = &Retry{ctx: ctx, cancel: cancel}
 
-	p.info.Station = station
+	p.info.Station = station.title
 	p.info.Status = buffering
 	p.info.Bitrate = 0
 	p.info.Song = ""
 	p.Info <- *p.info
 
-	p.Load(url)
+	p.Load(station.url)
 }
 
 func (p *Player) Stop() {
@@ -351,13 +439,7 @@ func reasonIsAnyOf(m map[string]any, needle ...string) bool {
 		return false
 	}
 
-	for _, n := range needle {
-		if m["reason"].(string) == n {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(needle, m["reason"].(string))
 }
 
 func eventIs(m map[string]any, needle string) bool {
@@ -369,11 +451,5 @@ func nameIs(m map[string]any, needle ...string) bool {
 		return false
 	}
 
-	for _, n := range needle {
-		if m["name"].(string) == n {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(needle, m["name"].(string))
 }

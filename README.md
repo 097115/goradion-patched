@@ -1,8 +1,9 @@
 # goradion
-Goradion is a command line radio player based on `mpv`. Goradion is inspired by [pyradio](https://github.com/coderholic/pyradio) and supports it's stations playlists.
+Goradion is a command line radio player based on `mpv`.
 <p align="center">
-  <img width="777" alt="goradion" src="https://github.com/agejevasv/goradion/assets/1682086/dff2d402-76dc-4212-a1ef-86e2fad2ff73">
+  <img alt="goradion" src="https://github.com/user-attachments/assets/1a86f861-10ed-4ad5-b90e-f48c4278c317">
 </p>
+
 
 ## Setup
 
@@ -14,7 +15,7 @@ Goradion is a command line radio player based on `mpv`. Goradion is inspired by 
       - `apt install mpv`
      
     - Arch Linux
-      - `pacman -S mpv`
+      - `pacman -S mpv` (there is also AUR package, so you can just do: `yay -S goradion`)
         
     - Windows
       - Download: [mpv](https://sourceforge.net/projects/mpv-player-windows/files/)
@@ -29,9 +30,6 @@ Goradion is a command line radio player based on `mpv`. Goradion is inspired by 
 ```bash
 chmod +x goradion-<version>
 ```
-
-**Arch Linux**: You can use AUR packages [goradion](https://aur.archlinux.org/packages/goradion) and [goradion-bin](https://aur.archlinux.org/packages/goradion-bin) maintained by [Amolith](https://github.com/Amolith).
-
 **Warning**: _[On some Windows machines](https://github.com/agejevasv/goradion/issues/1), a virus scanner identifies the binary as infected (https://go.dev/doc/faq#virus), in this case it's best to build the binary yourself: `go build .`._
 
 ## Run
@@ -42,42 +40,17 @@ goradion-<version>
 ```
 
 ## Stations
-For your own stations you can create a public [gist](https://gist.github.com/) file and pass a link with a raw version of it with `-s` flag, e.g.:
+The stations are configured using a CSV file with a titile, URL and semicolon `;` separated tag(s), e.g.:
 
-```bash
-goradion -s https://gist.githubusercontent.com/agejevasv/58afa748a7bc14dcccab1ca237d14a0b/raw/stations.csv
+```csv
+Title,URL,tag_1[;...;tag_n]
+...
 ```
-
-You can also create this file locally if you prefer. You can start with downloading and then editing [default stations](https://gist.githubusercontent.com/agejevasv/58afa748a7bc14dcccab1ca237d14a0b/raw/stations.csv):
-
+Stations file can be passed with `-s` argument; goradion supports both local files and HTTP URLs, e.g.:
 ```bash
 goradion -s /path/to/stations.csv
-```
-## Keyboard Control
-```
-Keyboard Control
 
-  *
-    Toggle playing a random station.
+OR
 
-  a-z and A-Z
-    Toggle playing a station marked with a given letter.
-
-  Enter and Space
-    Toggle playing currently selected station.
-
-  Left and Right, - and +
-    Change the volume in increments of 5.
-
-  Up and Down
-    Cycle through the radio station list.
-
-  PgUp and PgDown
-    Jump to a beginning/end of a station list.
-
-  Esc
-    Close current window.
-
-  ?
-    Toggle help.
+goradion -s https://path-to/stations.csv
 ```
